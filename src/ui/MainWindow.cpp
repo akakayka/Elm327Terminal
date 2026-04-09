@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QWidget>
 #include <QStatusBar>
 #include <QSplitter>
@@ -8,39 +9,65 @@
 #include <QMenuBar>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QLabel>
+#include "../style/AppStyle.h"
 
 MainWindow::MainWindow(AppController* controller, QWidget* parent)
     : QMainWindow(parent)
     , m_ctrl(controller)
 {
-    setWindowTitle("ELM327 Commander");
-    setMinimumSize(900, 650);
-    setupMenu();
+    
+    setWindowFlags(Qt::FramelessWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground);
+    setWindowTitle("ELM327 Terminal");
+    setMinimumSize(960, 680);
+    resize(1200, 780);
+
+    //setupMenu();
     setupUi();
 }
 
 void MainWindow::setupUi()
 {
+    // Создаем центральный виджет с прозрачным фоном
     QWidget* central = new QWidget(this);
+    central->setObjectName("centralWidget");
+    central->setStyleSheet(R"(
+        #centralWidget {
+            background-color: #F0EDE8;
+            border-radius: 12px;
+            border: 1px solid #D8D2C8;
+        }
+    )");
     setCentralWidget(central);
 
+    // Главный вертикальный layout для центрального виджета
     QVBoxLayout* mainLayout = new QVBoxLayout(central);
-    mainLayout->setSpacing(4);
-    mainLayout->setContentsMargins(8, 8, 8, 8);
+    mainLayout->setSpacing(0);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
 
-    // ── Панель подключения вверху ─────────────────────────────────────────────
+    // ========== ДОБАВИТЬ TITLEBAR ==========
+    m_titleBar = new TitleBar(this);
+    mainLayout->addWidget(m_titleBar);
+    // ======================================
+
+    // Контентный виджет (все остальное)
+    QWidget* contentWidget = new QWidget(this);
+    QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
+    contentLayout->setSpacing(8);
+    contentLayout->setContentsMargins(12, 10, 12, 12);
+
+    // Панель подключения
     m_connectionPanel = new ConnectionPanel(m_ctrl, this);
-    mainLayout->addWidget(m_connectionPanel);
+    contentLayout->addWidget(m_connectionPanel);
 
-    // ── Сплиттер: вкладки слева, терминал справа ─────────────────────────────
+    // Сплиттер
     QSplitter* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setChildrenCollapsible(false);
 
-    // Вкладки: Команды / Сценарии
     QTabWidget* tabs = new QTabWidget(this);
     m_commandPanel = new CommandPanel(m_ctrl, this);
     m_scenarioPanel = new ScenarioPanel(m_ctrl, this);
-    m_decoderPanel = new DecoderPanel(m_ctrl, this);
     m_decoderPanel = new DecoderPanel(m_ctrl, this);
     tabs->addTab(m_commandPanel, "Команды");
     tabs->addTab(m_scenarioPanel, "Сценарии");
@@ -53,15 +80,38 @@ void MainWindow::setupUi()
     splitter->setStretchFactor(0, 2);
     splitter->setStretchFactor(1, 3);
 
-    mainLayout->addWidget(splitter, 1);
+    contentLayout->addWidget(splitter, 1);
 
-    // ── Статусбар ─────────────────────────────────────────────────────────────
-    m_statusLabel = new QLabel("Не подключено", this);
+    mainLayout->addWidget(contentWidget);
+
+    // Статусбар
+    QWidget* leftSpacer = new QWidget();
+    leftSpacer->setFixedWidth(10);
+    QWidget* rightSpacer = new QWidget();
+    rightSpacer->setFixedWidth(10);
+    rightSpacer->setStyleSheet("background-color: transparent;");
+    m_statusLabel = new QLabel("○ Не подключено", this);
+    m_statusLabel->setStyleSheet("color: #8A8278;");
     m_portLabel = new QLabel("", this);
-    statusBar()->addWidget(m_statusLabel, 1);
-    statusBar()->addPermanentWidget(m_portLabel);
+    m_portLabel->setStyleSheet(
+        "color: #8A8278;"
+        "font-family: 'JetBrains Mono', 'Consolas', monospace;"
+        "font-size: 11px;"
+    );
 
-    // ── Сигналы: ConnectionPanel ──────────────────────────────────────────────
+
+    statusBar()->addWidget(m_statusLabel, 1);
+    statusBar()->setSizeGripEnabled(false);
+    statusBar()->addPermanentWidget(m_portLabel);
+    statusBar()->addPermanentWidget(rightSpacer);
+
+    // ========== ДОБАВИТЬ КОННЕКТЫ ДЛЯ TITLEBAR ==========
+    connect(m_titleBar, &TitleBar::maximizeRequested, [this]() {
+        m_titleBar->updateMaximizeButton(isMaximized());
+        });
+    // ===================================================
+
+    // Сигналы
     connect(m_connectionPanel, &ConnectionPanel::connected,
         this, &MainWindow::onConnected);
     connect(m_connectionPanel, &ConnectionPanel::disconnected,
@@ -69,17 +119,13 @@ void MainWindow::setupUi()
     connect(m_connectionPanel, &ConnectionPanel::statusMessage,
         this, &MainWindow::onStatusMessage);
 
-    // ── Сигналы: CommandPanel ─────────────────────────────────────────────────
     connect(m_commandPanel, &CommandPanel::statusMessage,
         this, &MainWindow::onStatusMessage);
-
-    // ── Сигналы: ScenarioPanel ────────────────────────────────────────────────
     connect(m_scenarioPanel, &ScenarioPanel::statusMessage,
         this, &MainWindow::onStatusMessage);
     connect(m_decoderPanel, &DecoderPanel::statusMessage,
         this, &MainWindow::onStatusMessage);
 
-    // ── Сигналы: AppController → TerminalPanel ────────────────────────────────
     connect(m_ctrl, &AppController::dataReceived,
         m_terminalPanel, &TerminalPanel::onDataReceived);
     connect(m_ctrl, &AppController::connectionError,
@@ -92,10 +138,8 @@ void MainWindow::setupUi()
         m_terminalPanel, &TerminalPanel::onScenarioFinished);
     connect(m_ctrl, &AppController::scenarioStopped,
         m_terminalPanel, &TerminalPanel::onScenarioStopped);
-    // TerminalPanel видит '>' → сообщает AppController → ScenarioRunner
     connect(m_terminalPanel, &TerminalPanel::adapterReady,
         m_ctrl, &AppController::onAdapterReady);
-    // Декодированные значения
     connect(m_ctrl, &AppController::decodedValue,
         m_terminalPanel, &TerminalPanel::onDecodedValue);
 }
@@ -106,9 +150,9 @@ void MainWindow::onConnected(const QString& port, int baudRate)
 {
     m_commandPanel->setConnected(true);
     m_scenarioPanel->setConnected(true);
-    m_statusLabel->setText("Подключено");
-    m_statusLabel->setStyleSheet("color: green; font-weight: bold;");
-    m_portLabel->setText(QString("Порт: %1  Скорость: %2").arg(port).arg(baudRate));
+    m_statusLabel->setText("● Подключено");
+    m_statusLabel->setStyleSheet("color: #3D7A52; font-weight: 600;");
+    m_portLabel->setText(QString("%1  ·  %2 бод").arg(port).arg(baudRate));
     m_terminalPanel->onCommandSent(
         QString("=== Подключено к %1 (%2 бод) ===").arg(port).arg(baudRate));
 }
@@ -117,8 +161,8 @@ void MainWindow::onDisconnected()
 {
     m_commandPanel->setConnected(false);
     m_scenarioPanel->setConnected(false);
-    m_statusLabel->setText("Не подключено");
-    m_statusLabel->setStyleSheet("");
+    m_statusLabel->setText("○ Не подключено");
+    m_statusLabel->setStyleSheet("color: #8A8278;");
     m_portLabel->setText("");
     m_terminalPanel->onConnectionError("=== Отключено ===");
 }
@@ -148,7 +192,6 @@ void MainWindow::onLoadFile()
     if (path.isEmpty()) return;
 
     if (m_ctrl->loadFromFile(path)) {
-        // Обновляем оба списка
         m_commandPanel->refreshList();
         m_scenarioPanel->refreshList();
         statusBar()->showMessage(QString("Загружено: %1").arg(path), 5000);

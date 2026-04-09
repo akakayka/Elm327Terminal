@@ -20,15 +20,23 @@ TerminalPanel::TerminalPanel(QWidget* parent)
     m_output = new QPlainTextEdit(this);
     m_output->setReadOnly(true);
     m_output->setMaximumBlockCount(10000);
-
-    QFont font("Courier New", 10);
-    font.setFixedPitch(true);
-    m_output->setFont(font);
+    m_output->setStyleSheet(
+        "QPlainTextEdit {"
+        "  font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;"
+        "  font-size: 12px;"
+        "  background-color: #EEEAE4;"
+        "  border: 1px solid #D8D2C8;"
+        "  border-radius: 6px;"
+        "  padding: 12px;"
+        "  selection-background-color: #DDE0F0;"
+        "}"
+    );
 
     m_clearBtn = new QPushButton("Очистить", this);
     m_saveBtn = new QPushButton("Сохранить лог", this);
     m_autoscrollCheck = new QCheckBox("Автопрокрутка", this);
     m_autoscrollCheck->setChecked(true);
+    m_autoscrollCheck->setStyleSheet("color: #8A8278; font-size: 12px;");
 
     QHBoxLayout* btnRow = new QHBoxLayout;
     btnRow->addWidget(m_clearBtn);
@@ -117,35 +125,17 @@ void TerminalPanel::onScenarioStep(const QString& cmd, int stepNum, int total,
     const QString& scenarioName)
 {
     m_output->appendHtml(
-        QString("<span style='color:#888888;font-style:italic;'>"
-            "[%1] Шаг %2/%3 &nbsp;</span>"
-            "<span style='color:#00aa00;'>&gt;&gt;&gt; %4</span>")
+        QString("<span style='color:#9890A8;font-size:11px;'>[%1] %2/%3</span>"
+            " <span style='color:#3D7A52;font-weight:600;'>›› %4</span>")
         .arg(scenarioName.toHtmlEscaped())
-        .arg(stepNum)
-        .arg(total)
+        .arg(stepNum).arg(total)
         .arg(cmd.toHtmlEscaped()));
-
     scrollToBottom();
 }
 
 void TerminalPanel::onScenarioFinished(const QString& scenarioName)
 {
     appendSystem(QString("=== Сценарий завершён: %1 ===").arg(scenarioName));
-}
-
-void TerminalPanel::onScenarioStopped(const QString& scenarioName)
-{
-    appendSystem(QString("=== Сценарий остановлен: %1 ===").arg(scenarioName));
-}
-
-void TerminalPanel::onDecodedValue(const QString& formatted)
-{
-    // Декодированные значения — оранжевый цвет, отступ чтобы визуально
-    // было понятно что это расшифровка предыдущей строки
-    m_output->appendHtml(
-        QString("<span style='color:#cc7700;'>%1</span>")
-        .arg(formatted.toHtmlEscaped()));
-    scrollToBottom();
 }
 
 // ── Private slots ─────────────────────────────────────────────────────────────
@@ -178,7 +168,7 @@ void TerminalPanel::onSaveClicked()
 void TerminalPanel::appendSent(const QString& text)
 {
     m_output->appendHtml(
-        QString("<span style='color:#00aa00;'>>>> %1</span>")
+        QString("<span style='color:#3D7A52;font-weight:600;'>›› %1</span>")
         .arg(text.toHtmlEscaped()));
     scrollToBottom();
 }
@@ -186,7 +176,7 @@ void TerminalPanel::appendSent(const QString& text)
 void TerminalPanel::appendReceived(const QString& text)
 {
     m_output->appendHtml(
-        QString("<span style='color:#0088cc;'>&lt;&lt;&lt; %1</span>")
+        QString("<span style='color:#2A5490;'>‹‹ %1</span>")
         .arg(text.toHtmlEscaped()));
     scrollToBottom();
 }
@@ -194,7 +184,7 @@ void TerminalPanel::appendReceived(const QString& text)
 void TerminalPanel::appendSystem(const QString& text)
 {
     m_output->appendHtml(
-        QString("<span style='color:#cc0000;'>[%1]</span>")
+        QString("<span style='color:#A09890;font-style:italic;'>%1</span>")
         .arg(text.toHtmlEscaped()));
     scrollToBottom();
 }
@@ -204,4 +194,17 @@ void TerminalPanel::scrollToBottom()
     if (m_autoscrollCheck->isChecked())
         m_output->verticalScrollBar()->setValue(
             m_output->verticalScrollBar()->maximum());
+}
+
+void TerminalPanel::onDecodedValue(const QString& formatted)
+{
+    m_output->appendHtml(
+        QString("<span style='color:#8B6914;font-size:11px;'>%1</span>")
+        .arg(formatted.toHtmlEscaped()));
+    scrollToBottom();
+}
+
+void TerminalPanel::onScenarioStopped(const QString& scenarioName)
+{
+    appendSystem(QString("=== Сценарий остановлен: %1 ===").arg(scenarioName));
 }

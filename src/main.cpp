@@ -4,22 +4,19 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QFont>
 
 #include "controllers/AppController.h"
 #include "ui/MainWindow.h"
+#include "style/AppStyle.h"
 
-// Создаём файл с базовыми командами и сценарием
 static void createDefaultFile(const QString& path)
 {
     QJsonArray commands;
     auto addCmd = [&](int id, const QString& text, const QString& name) {
-        QJsonObject o;
-        o["id"] = id;
-        o["name"] = name;
-        o["text"] = text;
+        QJsonObject o; o["id"] = id; o["name"] = name; o["text"] = text;
         commands.append(o);
         };
-
     addCmd(1, "ATZ", "Сброс адаптера");
     addCmd(2, "ATI", "Информация об адаптере");
     addCmd(3, "AT@1", "Информация об устройстве");
@@ -41,16 +38,14 @@ static void createDefaultFile(const QString& path)
     addCmd(19, "ATCP00", "Установка первых бит ID");
     addCmd(20, "ATSH000001", "Установка iD 01");
 
-    // Базовый сценарий — шаги по тексту команд
     QJsonObject scenario;
     scenario["id"] = 1;
     scenario["name"] = "Базовая настройка CAN";
     scenario["description"] = "Базовая настройка CAN";
     scenario["delayMs"] = 500;
     scenario["steps"] = QJsonArray{
-        "ATZ", "ATH1", "ATD1", "ATAL",
-        "ATSP9", "ATCAF0", "ATCF7FF",
-        "ATCM000", "ATCP00", "ATSH000001"
+        "ATZ","ATH1","ATD1","ATAL","ATSP9",
+        "ATCAF0","ATCF7FF","ATCM000","ATCP00","ATSH000001"
     };
 
     QJsonObject root;
@@ -65,18 +60,27 @@ static void createDefaultFile(const QString& path)
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
-    app.setApplicationName("ELM327 Commander");
+    app.setApplicationName("ELM327 Terminal");
+    app.setOrganizationName("ELM327");
 
+    // ── Глобальный стиль ─────────────────────────────────────────────────────
+    app.setStyleSheet(AppStyle::globalStyleSheet());
+
+    // Шрифт по умолчанию
+    QFont font("Segoe UI", 10);
+    font.setHintingPreference(QFont::PreferFullHinting);
+    app.setFont(font);
+
+    // ── Загрузка данных ──────────────────────────────────────────────────────
     AppController controller;
-
     const QString defaultPath =
         QDir(QApplication::applicationDirPath()).filePath("commands.json");
 
     if (!QFile::exists(defaultPath))
         createDefaultFile(defaultPath);
-
     controller.loadFromFile(defaultPath);
 
+    // ── Запуск окна ──────────────────────────────────────────────────────────
     MainWindow window(&controller);
     window.show();
 

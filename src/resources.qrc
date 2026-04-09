@@ -1,0 +1,6 @@
+<!DOCTYPE RCC><RCC version="1.0">
+    <qresource prefix="/">
+        <file>style/icons/icons8-done.svg</file>
+        <file>style/icons/ref.svg</file>
+    </qresource>
+</RCC>

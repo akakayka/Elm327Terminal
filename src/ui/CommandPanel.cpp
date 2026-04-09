@@ -37,6 +37,9 @@ void CommandPanel::setupUi()
     m_editBtn = new QPushButton("Изменить", this);
     m_deleteBtn = new QPushButton("Удалить", this);
 
+    m_sendBtn->setProperty("accent", true);
+    m_deleteBtn->setProperty("danger", true);
+
     QHBoxLayout* btnRow = new QHBoxLayout;
     btnRow->addWidget(m_sendBtn);
     btnRow->addWidget(m_addBtn);
@@ -48,6 +51,7 @@ void CommandPanel::setupUi()
     m_quickEdit->setPlaceholderText("Введите команду...");
 
     m_quickSendBtn = new QPushButton("Отправить", this);
+    m_quickSendBtn->setProperty("accent", true);
 
     QHBoxLayout* quickRow = new QHBoxLayout;
     quickRow->addWidget(new QLabel("Быстрая команда:", this));

@@ -3,6 +3,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>
+#include <QLabel>
 #include <QMessageBox>
 
 #include "../serial/SerialConnection.h"
@@ -35,37 +36,55 @@ void ConnectionPanel::setupUi()
 {
     m_portCombo = new QComboBox(this);
     m_baudCombo = new QComboBox(this);
-    m_refreshBtn = new QPushButton("Обновить", this);
+    m_refreshBtn = new QPushButton(" Обновить", this);
+    m_refreshBtn->setIcon(QIcon(":/style/icons/ref.svg")); m_refreshBtn->setStyleSheet(R"(
+        QPushButton {
+            padding-left: 10px;
+        }
+        QPushButton::icon {
+            left: 4px;
+            position: absolute;
+            
+        }
+    )");
+    m_refreshBtn->setIconSize(QSize(14, 14));
     m_connectBtn = new QPushButton("Подключиться", this);
     m_disconnectBtn = new QPushButton("Отключиться", this);
-    m_autoConnectBtn = new QPushButton("Автоматическое подключение", this);
+    m_autoConnectBtn = new QPushButton("Авто", this);
 
-    m_portCombo->setMinimumWidth(180);
+    m_connectBtn->setProperty("accent", true);
+    m_disconnectBtn->setProperty("danger", true);
+
+    // Компактные размеры
+    m_portCombo->setMinimumWidth(70);
+    m_baudCombo->setFixedWidth(100);
+    m_refreshBtn->setFixedWidth(106);
+    m_refreshBtn->setToolTip("Обновить список портов");
+    m_autoConnectBtn->setFixedWidth(60);
+    m_autoConnectBtn->setToolTip("Автоматическое подключение");
 
     for (int baud : BAUD_RATES)
         m_baudCombo->addItem(QString::number(baud), baud);
-    m_baudCombo->setCurrentIndex(2); // 38400 по умолчанию
+    m_baudCombo->setCurrentIndex(2);
 
-    QGroupBox* group = new QGroupBox("Подключение", this);
+    // ── Всё в одну строку ─────────────────────────────────────────────────────
+    QHBoxLayout* row = new QHBoxLayout;
+    row->setSpacing(6);
+    row->addWidget(new QLabel("Порт:", this));
+    row->addWidget(m_portCombo, 1);
+    row->addWidget(m_refreshBtn);
+    row->addSpacing(8);
+    row->addWidget(new QLabel("Скорость:", this));
+    row->addWidget(m_baudCombo);
+    row->addSpacing(8);
+    row->addWidget(m_connectBtn);
+    row->addWidget(m_disconnectBtn);
+    row->addWidget(m_autoConnectBtn);
 
-    QHBoxLayout* portRow = new QHBoxLayout;
-    portRow->addWidget(new QLabel("COM порт:", this));
-    portRow->addWidget(m_portCombo, 1);
-    portRow->addWidget(m_refreshBtn);
-
-    QHBoxLayout* baudRow = new QHBoxLayout;
-    baudRow->addWidget(new QLabel("Скорость:", this));
-    baudRow->addWidget(m_baudCombo, 1);
-
-    QHBoxLayout* btnRow = new QHBoxLayout;
-    btnRow->addWidget(m_connectBtn);
-    btnRow->addWidget(m_disconnectBtn);
-
+    QGroupBox* group = new QGroupBox(this);
     QVBoxLayout* groupLayout = new QVBoxLayout(group);
-    groupLayout->addLayout(portRow);
-    groupLayout->addLayout(baudRow);
-    groupLayout->addLayout(btnRow);
-    groupLayout->addWidget(m_autoConnectBtn);
+    groupLayout->setContentsMargins(10, 10, 10, 10);
+    groupLayout->addLayout(row);
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(group);
@@ -99,7 +118,7 @@ void ConnectionPanel::setAutoConnecting(bool active)
     m_portCombo->setEnabled(!active);
     m_baudCombo->setEnabled(!active);
 
-    m_autoConnectBtn->setText(active ? "Поиск..." : "Автоматическое подключение");
+    m_autoConnectBtn->setText(active ? "..." : "Авто");
 }
 
 // ── Slots ─────────────────────────────────────────────────────────────────────
@@ -179,7 +198,6 @@ void ConnectionPanel::onAutoConnectClicked()
         this, &ConnectionPanel::onAutoConnectNotFound);
     connect(worker, &AutoConnectWorker::progress,
         this, &ConnectionPanel::onAutoConnectProgress);
- 
 
     // Очистка: когда worker завершил — останавливаем поток и удаляем объекты
     connect(worker, &AutoConnectWorker::finished,

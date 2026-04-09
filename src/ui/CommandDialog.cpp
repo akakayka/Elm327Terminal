@@ -1,4 +1,5 @@
 #include "CommandDialog.h"
+#include "../style/AppStyle.h"
 
 #include <QFormLayout>
 #include <QVBoxLayout>
@@ -44,6 +45,7 @@ void CommandDialog::setupUi(const QString& title)
 
     // OK выключен пока поля не заполнены
     m_buttons->button(QDialogButtonBox::Ok)->setEnabled(false);
+    AppStyle::applyAccent(m_buttons->button(QDialogButtonBox::Ok));
 
     connect(m_nameEdit, &QLineEdit::textChanged, this, &CommandDialog::validate);
     connect(m_textEdit, &QLineEdit::textChanged, this, &CommandDialog::validate);

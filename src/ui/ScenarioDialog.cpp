@@ -1,4 +1,5 @@
 #include "ScenarioDialog.h"
+#include "../style/AppStyle.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -58,6 +59,7 @@ void ScenarioDialog::setupUi()
         m_commandList->addItem(QString("%1 - %2").arg(cmd.text).arg(cmd.name));
 
     QPushButton* addBtn = new QPushButton("Добавить →", this);
+    AppStyle::applyAccent(addBtn);
     addBtn->setToolTip("Добавить выбранную команду в сценарий");
 
     QVBoxLayout* leftLayout = new QVBoxLayout(leftGroup);
@@ -69,8 +71,11 @@ void ScenarioDialog::setupUi()
     m_stepList = new QListWidget(this);
 
     QPushButton* removeBtn = new QPushButton("Удалить", this);
-    QPushButton* upBtn = new QPushButton("▲ Вверх", this);
-    QPushButton* downBtn = new QPushButton("▼ Вниз", this);
+    AppStyle::applyDanger(removeBtn);
+    QPushButton* upBtn = new QPushButton("▲", this);
+    upBtn->setFixedWidth(40);
+    QPushButton* downBtn = new QPushButton("▼", this);
+    downBtn->setFixedWidth(40);
 
     QHBoxLayout* stepBtns = new QHBoxLayout;
     stepBtns->addWidget(upBtn);

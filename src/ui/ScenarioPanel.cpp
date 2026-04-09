@@ -1,5 +1,6 @@
 #include "ScenarioPanel.h"
 #include "ScenarioDialog.h"
+#include "../style/AppStyle.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -43,6 +44,10 @@ void ScenarioPanel::setupUi()
     m_addBtn = new QPushButton("Добавить", this);
     m_editBtn = new QPushButton("Изменить", this);
     m_deleteBtn = new QPushButton("Удалить", this);
+
+    AppStyle::applyAccent(m_runBtn);
+    AppStyle::applyDanger(m_stopBtn);
+    AppStyle::applyDanger(m_deleteBtn);
 
     QHBoxLayout* btnRow = new QHBoxLayout;
     btnRow->addWidget(m_runBtn);

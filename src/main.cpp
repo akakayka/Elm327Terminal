@@ -7,6 +7,7 @@
 #include <QFont>
 
 #include "controllers/AppController.h"
+#include "decoder/FilterStore.h"
 #include "ui/MainWindow.h"
 #include "style/AppStyle.h"
 
@@ -80,11 +81,19 @@ int main(int argc, char* argv[])
         createDefaultFile(defaultPath);
     controller.loadFromFile(defaultPath);
 
+    // ── Фильтры декодера ──────────────────────────────────────────────────────
+    const QString filtersPath =
+        QDir(QApplication::applicationDirPath()).filePath("filters.json");
+    if (!QFile::exists(filtersPath))
+        FilterStore::createDefaultFile(filtersPath);
+    controller.loadFilters(filtersPath);
+
     // ── Запуск окна ──────────────────────────────────────────────────────────
     MainWindow window(&controller);
     window.show();
 
     const int result = app.exec();
     controller.saveToFile(defaultPath);
+    controller.saveFilters(filtersPath);
     return result;
 }

@@ -1,143 +1,101 @@
 #include "CanDecoder.h"
-#include <cstring>
 
-CanDecoder::CanDecoder(QObject* parent) : QObject(parent)
+CanDecoder::CanDecoder(FilterStore* store, QObject* parent)
+    : QObject(parent)
+    , m_store(store)
 {
-    initParameters();
 }
 
 bool CanDecoder::isEnabled() const { return m_enabled; }
 void CanDecoder::setEnabled(bool e) { m_enabled = e; }
 
-void CanDecoder::initParameters()
+// ── Публичный метод ───────────────────────────────────────────────────────────
+
+QList<DecodeResult> CanDecoder::decode(const QString& line) const
 {
-    auto& p97 = m_params["18FF97"];
-    p97[0x01] = { "Температура контроллера" };
-    p97[0x02] = { "Температура транзисторов" };
-    p97[0x03] = { "Температура корпуса" };
-    p97[0x04] = { "Температура окруж. среды" };
-    p97[0x05] = { "Ток I1" };
-    p97[0x06] = { "Ток I2" };
-    p97[0x07] = { "Ток I3" };
-    p97[0x08] = { "Напряжение B" };
-    p97[0x09] = { "Напряжение B1" };
-    p97[0x0A] = { "Напряжение B2" };
-    p97[0x0B] = { "Напряжение B3" };
-    p97[0x0C] = { "Напряжение G" };
-    p97[0x0D] = { "dU" };
-    p97[0x0E] = { "on" };
-    p97[0x0F] = { "АПЖ" };
+    QList<DecodeResult> results;
+    if (!m_enabled || !m_store) return results;
 
-    auto& p98 = m_params["18FF98"];
-    p98[0x33] = { "VCC" };
-    p98[0x34] = { "REF" };
-    p98[0x35] = { "RT3" };
-    p98[0x36] = { "VIOUT1" };
-    p98[0x37] = { "VIOUT2" };
-    p98[0x38] = { "VIOUT3" };
+    const ParsedFrame frame = parseFrame(line);
+    if (!frame.valid) return results;
 
-    // 18FF93 — нет subId, одна запись
-    m_params["18FF93"][0] = { "KF1 KF2 KF3 KF4" };
+    const QList<CanFilter> filters = m_store->findByCanId(frame.canId);
+    if (filters.isEmpty()) return results;
+
+    for (const CanFilter& filter : filters) {
+        DecodeResult r;
+        r.canId = frame.canId;
+        r.name = filter.name;
+        r.unit = filter.unit;
+
+        // Подставляем байты b0..b7 в вычислитель
+        ExprEval eval;
+        for (int i = 0; i < 8; ++i) {
+            const double val = (i < frame.bytes.size()) ? frame.bytes[i] : 0.0;
+            eval.setVar(QString("b%1").arg(i), val);
+        }
+        // Дополнительно: n = количество байт данных
+        eval.setVar("n", frame.bytes.size());
+
+        QString err;
+        r.value = eval.eval(filter.formula, &err);
+
+        if (!err.isEmpty()) {
+            r.error = err;
+            r.formatted = QString("    ↳ %1: [ошибка формулы: %2]").arg(r.name).arg(err);
+        }
+        else {
+            // Форматируем число: убираем лишние нули после запятой
+            const QString valStr = (r.value == std::floor(r.value) &&
+                std::abs(r.value) < 1e9)
+                ? QString::number((long long)r.value)
+                : QString::number(r.value, 'f', 3);
+
+            r.formatted = QString("    ↳ %1: %2%3")
+                .arg(r.name)
+                .arg(valStr)
+                .arg(r.unit.isEmpty() ? "" : " " + r.unit);
+        }
+        r.valid = true;
+        results.append(r);
+    }
+    return results;
 }
 
-// Формат строки: "18 FF 97 90 <size> <subId> <b0> <b1> <b2> <b3>"
-//                  [0] [1] [2] [3]   [4]     [5]  [6]  [7]  [8]  [9]
-DecodeResult CanDecoder::decode(const QString& line) const
-{
-    DecodeResult result;
-    if (!m_enabled) return result;
+// ── Парсинг ───────────────────────────────────────────────────────────────────
 
+CanDecoder::ParsedFrame CanDecoder::parseFrame(const QString& line)
+{
+    ParsedFrame frame;
+
+    // Формат: "18 FF 97 90 5 01 41 A0 00 00"
+    //         [0] [1] [2][3][4][5..] данные
     const QStringList parts = line.trimmed().split(' ', Qt::SkipEmptyParts);
-    if (parts.size() < 5) return result;
+    if (parts.size() < 5) return frame;
 
-    const QString canId = (parts[0] + parts[1] + parts[2]).toUpper();
-    result.canId = canId;
+    // Проверяем что первые 3 части — hex байты (составляют CAN ID)
+    bool ok0, ok1, ok2;
+    parts[0].toUInt(&ok0, 16);
+    parts[1].toUInt(&ok1, 16);
+    parts[2].toUInt(&ok2, 16);
+    if (!ok0 || !ok1 || !ok2) return frame;
 
-    if (canId == "18FF97") return decode97(parts);
-    if (canId == "18FF98") return decode98(parts);
-    if (canId == "18FF93") return decode93(parts);
+    frame.canId = (parts[0] + parts[1] + parts[2]).toUpper();
 
-    return result;
+    // parts[3] — доп. байт (90 и т.д.), parts[4] — размер данных
+    bool okSize;
+    const int dataSize = parts[4].toInt(&okSize);
+    if (!okSize || dataSize < 1) return frame;
+
+    // Байты данных начинаются с parts[5]
+    for (int i = 5; i < parts.size(); ++i)
+        frame.bytes.append(hexByte(parts[i]));
+
+    frame.valid = true;
+    return frame;
 }
 
-DecodeResult CanDecoder::decode97(const QStringList& parts) const
+uint8_t CanDecoder::hexByte(const QString& s)
 {
-    // parts: [0]=18 [1]=FF [2]=97 [3]=90 [4]=5 [5]=subId [6]=b0 [7]=b1 [8]=b2 [9]=b3
-    DecodeResult r;
-    if (parts.size() < 10) return r;
-
-    r.canId = "18FF97";
-    r.subId = hexByte(parts[5]);
-
-    const uint8_t b0 = hexByte(parts[6]);
-    const uint8_t b1 = hexByte(parts[7]);
-    const uint8_t b2 = hexByte(parts[8]);
-    const uint8_t b3 = hexByte(parts[9]);
-
-    r.value = ieeeFloat(b0, b1, b2, b3);
-    r.valid = true;
-    return r;
-}
-
-DecodeResult CanDecoder::decode98(const QStringList& parts) const
-{
-    // parts: [0]=18 [1]=FF [2]=98 [3]=90 [4]=3 [5]=subId [6]=b0 [7]=b1
-    DecodeResult r;
-    if (parts.size() < 8) return r;
-
-    r.canId = "18FF98";
-    r.subId = hexByte(parts[5]);
-
-    // Конкатенация двух байт → HEX → DEC
-    const QString hexStr = parts[6].toUpper() + parts[7].toUpper();
-    bool ok;
-    r.value = hexStr.toInt(&ok, 16);
-    if (!ok) return r;
-
-    r.valid = true;
-    return r;
-}
-
-DecodeResult CanDecoder::decode93(const QStringList& parts) const
-{
-    // parts: [0]=18 [1]=FF [2]=93 [3]=90 [4]=4 [5]=b0 [6]=b1 [7]=b2 [8]=b3
-    DecodeResult r;
-    if (parts.size() < 9) return r;
-
-    r.canId = "18FF93";
-    r.subId = -1; // нет subId
-
-    const int v0 = hexByte(parts[5]);
-    const int v1 = hexByte(parts[6]);
-    const int v2 = hexByte(parts[7]);
-    const int v3 = hexByte(parts[8]);
-
-    r.text = QString("KF1=%1 KF2=%2 KF3=%3 KF4=%4").arg(v0).arg(v1).arg(v2).arg(v3);
-    r.valid = true;
-    return r;
-}
-
-float CanDecoder::ieeeFloat(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3)
-{
-    const uint32_t raw = (uint32_t(b0) << 24) | (uint32_t(b1) << 16)
-        | (uint32_t(b2) << 8) | uint32_t(b3);
-    float f;
-    std::memcpy(&f, &raw, sizeof(float));
-    return f;
-}
-
-uint8_t CanDecoder::hexByte(const QString& hex)
-{
-    return static_cast<uint8_t>(hex.toUInt(nullptr, 16));
-}
-
-void CanDecoder::setParameter(const QString& canId, int subId, const CanParameter& param)
-{
-    m_params[canId.toUpper()][subId] = param;
-}
-
-void CanDecoder::removeParameter(const QString& canId, int subId)
-{
-    if (m_params.contains(canId.toUpper()))
-        m_params[canId.toUpper()].remove(subId);
+    return static_cast<uint8_t>(s.toUInt(nullptr, 16));
 }

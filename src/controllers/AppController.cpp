@@ -10,7 +10,8 @@ AppController::AppController(QObject* parent)
     , m_store(std::make_unique<CommandStore>())
     , m_scenarioStore(std::make_unique<ScenarioStore>())
     , m_runner(std::make_unique<ScenarioRunner>())
-    , m_decoder(std::make_unique<CanDecoder>())
+    , m_filterStore(std::make_unique<FilterStore>())
+    , m_decoder(std::make_unique<CanDecoder>(m_filterStore.get()))
 {
     connect(m_connection.get(), &SerialConnection::dataReceived,
         this, &AppController::dataReceived);
@@ -35,11 +36,9 @@ bool AppController::loadFromFile(const QString& filePath)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return false;
-
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject()) return false;
-
     QJsonObject root = doc.object();
     m_store->loadFromJson(root);
     m_scenarioStore->loadFromJson(root);
@@ -51,11 +50,20 @@ bool AppController::saveToFile(const QString& filePath) const
     QJsonObject root;
     m_store->saveToJson(root);
     m_scenarioStore->saveToJson(root);
-
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly)) return false;
     file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
     return true;
+}
+
+bool AppController::loadFilters(const QString& filePath)
+{
+    return m_filterStore->loadFromFile(filePath);
+}
+
+bool AppController::saveFilters(const QString& filePath) const
+{
+    return m_filterStore->saveToFile(filePath);
 }
 
 // ── Подключение ───────────────────────────────────────────────────────────────
@@ -64,7 +72,6 @@ bool AppController::connectSerial(const QString& port, int baudRate)
 {
     return m_connection->connectPort(port, baudRate);
 }
-
 void AppController::disconnectSerial() { m_connection->disconnectPort(); }
 bool AppController::isConnected() const { return m_connection->isOpen(); }
 
@@ -75,9 +82,8 @@ void AppController::addCommand(const QString& name, const QString& text)
     Command cmd; cmd.id = 0; cmd.name = name; cmd.text = text;
     m_store->addCommand(cmd);
 }
-
 bool AppController::removeCommand(int id) { return m_store->removeById(id); }
-bool AppController::updateCommand(const Command& cmd) { return m_store->updateCommand(cmd); }
+bool AppController::updateCommand(const Command& c) { return m_store->updateCommand(c); }
 const QList<Command>& AppController::commands() const { return m_store->commands(); }
 
 // ── Сценарии ──────────────────────────────────────────────────────────────────
@@ -92,10 +98,15 @@ void AppController::runScenario(int id)
     auto s = m_scenarioStore->findById(id);
     if (s.has_value()) m_runner->run(*s);
 }
-
 void AppController::stopScenario() { m_runner->stop(); }
 bool AppController::isScenarioRunning() const { return m_runner->isRunning(); }
 void AppController::onAdapterReady() { m_runner->onAdapterReady(); }
+
+// ── Декодер ───────────────────────────────────────────────────────────────────
+
+FilterStore* AppController::filterStore() const { return m_filterStore.get(); }
+void AppController::setDecoderEnabled(bool e) { m_decoder->setEnabled(e); }
+bool AppController::isDecoderEnabled() const { return m_decoder->isEnabled(); }
 
 // ── Отправка ──────────────────────────────────────────────────────────────────
 
@@ -104,11 +115,6 @@ bool AppController::sendRaw(const QString& text)
     if (!m_connection->send(text)) return false;
     emit commandSent(text);
     return true;
-}
-
-bool AppController::sendFromScenario(const QString& text)
-{
-    return m_connection->send(text);
 }
 
 bool AppController::sendByName(const QString& name)
@@ -125,10 +131,12 @@ bool AppController::sendById(int id)
     return sendRaw(cmd->text);
 }
 
-// ── Декодер ───────────────────────────────────────────────────────────────────
+bool AppController::sendFromScenario(const QString& text)
+{
+    return m_connection->send(text);
+}
 
-void AppController::setDecoderEnabled(bool e) { m_decoder->setEnabled(e); }
-bool AppController::isDecoderEnabled() const { return m_decoder->isEnabled(); }
+// ── Декодирование ─────────────────────────────────────────────────────────────
 
 void AppController::tryDecode(const QString& data)
 {
@@ -148,48 +156,8 @@ void AppController::tryDecode(const QString& data)
         m_lineBuffer = m_lineBuffer.mid(pos + 1);
         if (line.isEmpty()) continue;
 
-        const DecodeResult r = m_decoder->decode(line);
-        if (!r.valid) continue;
-
-        QString formatted;
-        if (r.canId == "18FF93") {
-            // Несколько значений без subId
-            formatted = QString("    \u21b3 %1").arg(r.text);
-        }
-        else {
-            // Ищем имя параметра
-            QString name = QString("%1:%2")
-                .arg(r.canId)
-                .arg(r.subId, 2, 16, QChar('0')).toUpper();
-
-            const auto& params = m_decoder->parameters();
-            if (params.contains(r.canId) && params[r.canId].contains(r.subId))
-                name = params[r.canId][r.subId].name;
-
-            formatted = QString("    \u21b3 %1: %2")
-                .arg(name)
-                .arg(r.value, 0, 'f', 3);
-        }
-
-        emit decodedValue(formatted);
+        const QList<DecodeResult> results = m_decoder->decode(line);
+        for (const DecodeResult& r : results)
+            emit decodedValue(r.formatted);
     }
-}
-
-const QMap<QString, QMap<int, CanParameter>>& AppController::decoderParameters() const
-{
-    return m_decoder->parameters();
-}
-
-void AppController::setDecoderParameter(const QString& canId, int subId,
-    const CanParameter& param,
-    const QString& oldCanId, int oldSubId)
-{
-    if (!oldCanId.isEmpty() && (oldCanId != canId || oldSubId != subId))
-        m_decoder->removeParameter(oldCanId, oldSubId);
-    m_decoder->setParameter(canId, subId, param);
-}
-
-void AppController::removeDecoderParameter(const QString& canId, int subId)
-{
-    m_decoder->removeParameter(canId, subId);
 }

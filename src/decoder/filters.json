@@ -1,0 +1,28 @@
+{
+  "filters": [
+    {
+      "id": 1,
+      "canId": "18FF97",
+      "name": "Параметр 18FF97",
+      "unit": "",
+      "formula": "ieee754(b1,b2,b3,b4)",
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "canId": "18FF98",
+      "name": "Аналоговый канал 18FF98",
+      "unit": "у.е.",
+      "formula": "hex2dec(b1,b2)",
+      "enabled": true
+    },
+    {
+      "id": 3,
+      "canId": "18FF93",
+      "name": "Коэффициенты KF",
+      "unit": "",
+      "formula": "b1",
+      "enabled": true
+    }
+  ]
+}

@@ -12,6 +12,7 @@
 #include "ScenarioPanel.h"
 #include "TerminalPanel.h"
 #include "DecoderPanel.h"
+#include "ErrorPanel.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -39,6 +40,7 @@ private:
     DecoderPanel* m_decoderPanel;
     TerminalPanel* m_terminalPanel;
     TitleBar* m_titleBar;
+    ErrorPanel* m_errorPanel;
 
     QLabel* m_statusLabel;
     QLabel* m_portLabel;

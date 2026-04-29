@@ -4,11 +4,8 @@
 #include <QTableWidget>
 #include <QPushButton>
 #include <QCheckBox>
-
 #include "../controllers/AppController.h"
 
-// DecoderPanel — таблица фильтров декодирования CAN сообщений.
-// Каждая строка: CAN ID | SubID | Название
 class DecoderPanel : public QWidget {
     Q_OBJECT
 
@@ -20,19 +17,22 @@ signals:
 
 private slots:
     void onAddClicked();
+    void onEditClicked();
     void onDeleteClicked();
-    void onEnabledToggled(bool enabled);
-    void onCellChanged(int row, int col);
+    void onToggleEnabled();
+    void onDecoderToggled(bool checked);
+    void onSelectionChanged();
 
 private:
     void setupUi();
     void refreshTable();
 
     AppController* m_ctrl;
-    bool           m_updating = false;
 
     QCheckBox* m_enabledCheck;
     QTableWidget* m_table;
     QPushButton* m_addBtn;
+    QPushButton* m_editBtn;
     QPushButton* m_deleteBtn;
+    QPushButton* m_toggleBtn;  // Вкл/Выкл выбранный фильтр
 };

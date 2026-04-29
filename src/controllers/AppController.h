@@ -8,6 +8,7 @@
 #include "../commands/CommandStore.h"
 #include "../scenarios/ScenarioStore.h"
 #include "../scenarios/ScenarioRunner.h"
+#include "../decoder/FilterStore.h"
 #include "../decoder/CanDecoder.h"
 
 class AppController : public QObject {
@@ -16,9 +17,13 @@ class AppController : public QObject {
 public:
     explicit AppController(QObject* parent = nullptr);
 
-    // ── Файл ─────────────────────────────────────────────────────────────────
+    // ── Файл (команды + сценарии) ─────────────────────────────────────────────
     bool loadFromFile(const QString& filePath);
     bool saveToFile(const QString& filePath) const;
+
+    // ── Фильтры (отдельный файл) ──────────────────────────────────────────────
+    bool loadFilters(const QString& filePath);
+    bool saveFilters(const QString& filePath) const;
 
     // ── Подключение ──────────────────────────────────────────────────────────
     bool connectSerial(const QString& port, int baudRate);
@@ -36,27 +41,20 @@ public:
     bool removeScenario(int id);
     bool updateScenario(const Scenario& s);
     const QList<Scenario>& scenarios() const;
-
     void runScenario(int id);
     void stopScenario();
     bool isScenarioRunning() const;
     void onAdapterReady();
 
+    // ── Фильтры декодера ─────────────────────────────────────────────────────
+    FilterStore* filterStore() const;
+    void setDecoderEnabled(bool enabled);
+    bool isDecoderEnabled() const;
+
     // ── Отправка ─────────────────────────────────────────────────────────────
     bool sendRaw(const QString& text);
     bool sendByName(const QString& name);
     bool sendById(int id);
-
-    // ── Декодер ──────────────────────────────────────────────────────────────
-    void setDecoderEnabled(bool enabled);
-    bool isDecoderEnabled() const;
-    const QMap<QString, QMap<int, CanParameter>>& decoderParameters() const;
-    void setDecoderParameter(const QString& canId, int subId,
-        const CanParameter& param,
-        const QString& oldCanId = "", int oldSubId = -1);
-    void removeDecoderParameter(const QString& canId, int subId);
-
-
 
 signals:
     void dataReceived(const QString& data);
@@ -66,20 +64,19 @@ signals:
         const QString& scenarioName);
     void scenarioFinished(const QString& scenarioName);
     void scenarioStopped(const QString& scenarioName);
-    // Декодированное значение готово к выводу
     void decodedValue(const QString& formatted);
 
 private slots:
     bool sendFromScenario(const QString& text);
-    // Вызывается на каждую входящую строку для попытки декодирования
-    void tryDecode(const QString& line);
+    void tryDecode(const QString& data);
 
 private:
     std::unique_ptr<SerialConnection> m_connection;
     std::unique_ptr<CommandStore>     m_store;
     std::unique_ptr<ScenarioStore>    m_scenarioStore;
     std::unique_ptr<ScenarioRunner>   m_runner;
+    std::unique_ptr<FilterStore>      m_filterStore;
     std::unique_ptr<CanDecoder>       m_decoder;
 
-    QString m_lineBuffer; // буфер для построчного декодирования
+    QString m_lineBuffer;
 };

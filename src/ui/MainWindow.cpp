@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QLabel>
 #include "../style/AppStyle.h"
+#include "ErrorPanel.h"
 
 MainWindow::MainWindow(AppController* controller, QWidget* parent)
     : QMainWindow(parent)
@@ -82,6 +83,10 @@ void MainWindow::setupUi()
 
     contentLayout->addWidget(splitter, 1);
 
+    // Панель ошибок под сплиттером
+    m_errorPanel = new ErrorPanel(this);
+    contentLayout->addWidget(m_errorPanel);
+
     mainLayout->addWidget(contentWidget);
 
     // Статусбар
@@ -125,6 +130,11 @@ void MainWindow::setupUi()
         this, &MainWindow::onStatusMessage);
     connect(m_decoderPanel, &DecoderPanel::statusMessage,
         this, &MainWindow::onStatusMessage);
+    // Передаём статусные сообщения также в ErrorPanel
+    connect(m_commandPanel, &CommandPanel::statusMessage,
+        m_errorPanel, &ErrorPanel::addError);
+    connect(m_scenarioPanel, &ScenarioPanel::statusMessage,
+        m_errorPanel, &ErrorPanel::addError);
 
     connect(m_ctrl, &AppController::dataReceived,
         m_terminalPanel, &TerminalPanel::onDataReceived);
@@ -142,6 +152,10 @@ void MainWindow::setupUi()
         m_ctrl, &AppController::onAdapterReady);
     connect(m_ctrl, &AppController::decodedValue,
         m_terminalPanel, &TerminalPanel::onDecodedValue);
+    connect(m_ctrl, &AppController::connectionError,
+        m_errorPanel, &ErrorPanel::addError);
+    connect(m_commandPanel, &CommandPanel::statusMessage,
+        m_errorPanel, &ErrorPanel::addError);
 }
 
 // ── Slots ─────────────────────────────────────────────────────────────────────
